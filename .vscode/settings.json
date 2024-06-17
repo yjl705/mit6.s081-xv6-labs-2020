@@ -11,6 +11,8 @@
         "algorithm": "c",
         "complex": "c",
         "__config": "c",
-        "istream": "c"
+        "istream": "c",
+        "types.h": "c",
+        "stat.h": "c"
     }
 }
