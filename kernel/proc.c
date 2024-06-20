@@ -102,6 +102,9 @@ allocproc(void)
       release(&p->lock);
     }
   }
+
+  p->syscall_trace = 0; // (newly added) 为 syscall_trace 设置一个 0 的默认值
+
   return 0;
 
 found:
@@ -276,6 +279,8 @@ fork(void)
   np->sz = p->sz;
 
   np->parent = p;
+
+  np->syscall_trace = p->syscall_trace; // copy trace mask to child
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
