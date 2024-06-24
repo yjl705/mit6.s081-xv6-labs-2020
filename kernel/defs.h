@@ -180,8 +180,12 @@ void            uvmclear(pagetable_t, uint64);
 uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
+int             copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+int             copyinstr_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max);
 int             vmprint(pagetable_t pagetable); // 添加函数声明
+int             kvmcopymappings(pagetable_t old, pagetable_t new, uint64 start, uint64 sz);
+uint64          kvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz);
 
 
 // plic.c

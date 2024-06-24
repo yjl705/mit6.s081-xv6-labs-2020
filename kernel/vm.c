@@ -57,6 +57,9 @@ kvminit()
   // // map the trampoline for trap entry/exit to
   // // the highest virtual address in the kernel.
   // kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  // CLINT *is* however required during kernel boot up and
+  // we should map it for the global kernel pagetable
+  kvmmap(kernel_pagetable, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
 }
 
 void
@@ -69,7 +72,7 @@ kvm_map_pagetable(pagetable_t ptb)
   kvmmap(ptb, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
 
   // CLINT
-  kvmmap(ptb, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+  // kvmmap(ptb, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
 
   // PLIC
   kvmmap(ptb, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
@@ -197,6 +200,60 @@ kvmpa(pagetable_t ptb,uint64 va)
   return pa+off;
 }
 
+// 把src 映射关系拷贝到dst中
+// 只拷贝页表项，不拷贝实际的物理页内存。
+// 成功返回0，失败返回 -1
+// 基本是抄uvmcopy的
+int
+kvmcopymappings(pagetable_t old, pagetable_t new, uint64 start, uint64 sz)
+{
+  pte_t *pte;
+  uint64 pa, i;
+  uint flags;
+  char *mem;
+
+  for(i = PGROUNDUP(start); i < start+sz; i += PGSIZE){
+    if((pte = walk(old, i, 0)) == 0)
+      panic("kvmcopymappings: pte should exist");
+    if((*pte & PTE_V) == 0)
+      panic("kvmcopymappings: page not present");
+    pa = PTE2PA(*pte);
+    // `& ~PTE_U` 表示将该页的权限设置为非用户页
+    // 必须设置该权限，RISC-V 中内核是无法直接访问用户页的。
+    flags = PTE_FLAGS(*pte) & ~PTE_U;
+    // 这里不需要拷贝物理页内存
+    // if((mem = kalloc()) == 0)
+    //   goto err;
+    // memmove(mem, (char*)pa, PGSIZE); 
+    if(mappages(new, i, PGSIZE, pa, flags) != 0){
+      kfree(mem);
+      goto err;
+    }
+  }
+  return 0;
+
+ err:
+  // 这里不需要free 物理内存因为就没有拷贝它
+  uvmunmap(new, PGROUNDUP(start), (i - PGROUNDUP(start)) / PGSIZE, 0);
+  return -1;
+}
+
+
+// 与 uvmdealloc 功能类似，将程序内存从 oldsz 缩减到 newsz。但区别在于不释放实际内存
+// 用于内核页表内程序内存映射与用户页表程序内存映射之间的同步
+uint64
+kvmdealloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
+{
+  if(newsz >= oldsz)
+    return oldsz;
+
+  if(PGROUNDUP(newsz) < PGROUNDUP(oldsz)){
+    int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
+    uvmunmap(pagetable, PGROUNDUP(newsz), npages, 0);
+  }
+
+  return newsz;
+}
 
 
 // Create PTEs for virtual addresses starting at va that refer to
@@ -437,6 +494,11 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
+  // Replace copyin() with a call to copyin_new
+  return copyin_new(pagetable, dst, srcva, len);
+
+
+
   uint64 n, va0, pa0;
 
   while(len > 0){
@@ -463,6 +525,9 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
+  return copyinstr_new(pagetable, dst, srcva, max);
+
+
   uint64 n, va0, pa0;
   int got_null = 0;
 
