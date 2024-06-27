@@ -67,7 +67,18 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } else if (r_scause() == 13 || r_scause() == 15) {
+    // lazy allocation
+    uint64 va = r_stval();
+
+    if(allowLazyAllocation(va)) {
+      lazyAllocation(va);
+    } else {
+      p->killed = 1;
+    }
+    
+    
+  }else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
@@ -81,6 +92,33 @@ usertrap(void)
     yield();
 
   usertrapret();
+}
+
+int
+allowLazyAllocation(uint64 va) {
+  struct proc *p = myproc();
+  pte_t *pte;
+
+  return va < p->sz && PGROUNDDOWN(va) != r_sp() // not accessing stack guard page (it shouldn't be mapped)
+    && (((pte = walk(p->pagetable, va, 0))==0) || ((*pte & PTE_V)==0)); // page table entry does not exist
+}
+
+void 
+lazyAllocation(uint64 va) {
+  char *mem;
+  mem = kalloc();
+  struct proc *p = myproc();
+  if(mem == 0) {
+    // kfree(mem);
+    p->killed = 1;
+  } else {
+    memset(mem, 0, PGSIZE);
+    if(mappages(p->pagetable, PGROUNDDOWN(va), PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+      kfree(mem);
+      // uvmdealloc(p->pagetable, PGROUNDDOWN(va), PGROUNDDOWN(va));
+      p->killed = 1;
+    }
+  }
 }
 
 //
