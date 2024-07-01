@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "sstream": "c",
-        "streambuf": "c"
+        "streambuf": "c",
+        "__threading_support": "c"
     }
 }
