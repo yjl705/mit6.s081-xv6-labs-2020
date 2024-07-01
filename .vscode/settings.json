@@ -2,6 +2,10 @@
     "files.associations": {
         "sstream": "c",
         "streambuf": "c",
-        "__threading_support": "c"
+        "__threading_support": "c",
+        "chrono": "c",
+        "cmath": "c",
+        "locale": "c",
+        "__mutex_base": "c"
     }
 }
