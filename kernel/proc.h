@@ -18,6 +18,11 @@ struct context {
   uint64 s11;
 };
 
+struct mem{
+  struct spinlock lock;
+  struct run *freelist;
+};
+
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
